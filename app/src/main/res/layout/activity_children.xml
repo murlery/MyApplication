@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_marginHorizontal="16sp"
+    >
+
+    <TextView
+        android:id="@+id/welcomeTextView"
+        android:layout_width="match_parent"
+        android:layout_height="106dp"
+        android:layout_marginTop="16sp"
+
+        android:rotationX="0"
+        android:textAlignment="center"
+        android:textSize="36sp"
+        android:textColor="@color/teal_700"
+        />
+    <TextView
+        android:id="@+id/addChildTextView"
+        android:layout_width="match_parent"
+        android:layout_height="50sp"
+        android:layout_below="@id/welcomeTextView"
+
+        android:textColor="@color/teal_700"
+        android:rotationX="0"
+        android:textSize="24sp"
+        android:textAlignment="center"
+        android:text="@string/addChildTextView"/>
+    <CheckBox
+        android:id="@+id/childCheckbox"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/addChildTextView"
+        android:layout_marginHorizontal="16sp"
+        android:layout_marginBottom="8sp"
+        android:text="@string/add_child_checkbox_text"
+        android:textColor="@color/teal_700"/>
+    <EditText
+        android:layout_width="match_parent"
+        android:layout_height="70sp"
+        android:id="@+id/nameChildEditText"
+        android:layout_below="@+id/childCheckbox"
+        android:layout_marginBottom="24sp"
+        android:layout_marginHorizontal="16sp"
+        android:hint="@string/child_name_hint"
+        android:inputType="text"
+        />
+    <EditText
+        android:layout_width="match_parent"
+        android:layout_height="70sp"
+        android:id="@+id/birthdayChildEditText"
+        android:layout_below="@+id/nameChildEditText"
+        android:layout_marginBottom="16sp"
+        android:layout_marginHorizontal="16sp"
+        android:hint="@string/child_birthday_hint"
+        android:inputType="date"
+        />
+
+    <Button
+        android:id="@+id/addChildButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/birthdayChildEditText"
+        android:backgroundTint="@color/teal_200"
+        android:text="@string/add_child_button_text"
+        android:enabled="false"/>
+
+
+
+
+
+</RelativeLayout>

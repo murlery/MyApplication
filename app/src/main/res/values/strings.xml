@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_menu">Меню</string>
+    <string name="name_hint">Логин</string>
+    <string name="password_hint">Пароль</string>
+    <string name="login_button_text">Войти</string>
+    <string name="add_child_checkbox_text">Добавить ребенка</string>
+    <string name="child_name_hint">Имя ребенка</string>
+    <string name="child_age_hint">Возраст ребенка</string>
+    <string name="child_birthday_hint">Дата рождения (ДД.ММ.ГГГГ)</string>
+    <string name="add_child_button_text">Добавить ребенка</string>
+    <string name="your_children">Ваши дети</string>
+    <string name="addChildTextView">Добавьте ребенка)</string>
+    <string name="inputLoginTextView">Приложение для родителей</string>
+    <string name="next_button_text">Далее</string>
+    <string name="list_children_title">Список детей</string>
+    <string name="children_title">Добавление ребенка</string>
+    <string name="main_title">Окно входа</string>
+
+
+</resources>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5D5FF">
+
+
+    <TextView
+        android:id="@+id/inputLoginTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24sp"
+
+        android:paddingVertical="48sp"
+        android:rotationX="0"
+        android:text="@string/inputLoginTextView"
+        android:textAlignment="center"
+        android:textColor="@color/teal_700"
+
+        android:textSize="36sp"
+        android:textStyle="bold" />
+
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/inputLoginTextView"
+        android:layout_marginHorizontal="16sp"
+        android:background="@color/white"
+        android:padding="24sp">
+
+        <EditText
+            android:id="@+id/name_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+
+            android:hint="@string/name_hint"
+            android:inputType="text"
+            android:minHeight="48dp" />
+
+        <EditText
+            android:id="@+id/password_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/name_input"
+            android:hint="@string/password_hint"
+            android:inputType="textPassword"
+            android:minHeight="48dp" />
+
+        <Button
+            android:id="@+id/login_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/password_input"
+            android:background="@color/teal_200"
+            android:text="@string/login_button_text" />
+
+    </RelativeLayout>
+
+
+</RelativeLayout>

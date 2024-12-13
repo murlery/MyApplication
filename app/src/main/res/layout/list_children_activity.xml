@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/yourChildrenTextView"
+        android:layout_width="match_parent"
+        android:layout_height="106dp"
+        android:layout_marginTop="48sp"
+        android:layout_marginBottom="24sp"
+        android:textAlignment="center"
+        android:textSize="36sp"
+        android:textColor="@color/teal_700"/>
+
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefreshLayout"
+        android:layout_width="match_parent"
+        android:layout_height="227dp"
+        android:layout_below="@id/yourChildrenTextView">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/childrenRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+android:id="@+id/readBtn"
+        android:layout_below="@id/swipeRefreshLayout">
+
+        <Button
+            android:id="@+id/load_txt_button"
+            android:layout_width="130dp"
+            android:layout_height="wrap_content"
+            android:text="Загрузить из TXT" />
+
+        <Button
+            android:id="@+id/load_binary_button"
+            android:layout_width="130dp"
+            android:layout_height="wrap_content"
+            android:text="Загрузить из бин файла" />
+
+        <Button
+            android:id="@+id/load_pdf_button"
+            android:layout_width="130dp"
+            android:layout_height="wrap_content"
+            android:text="Загрузить из PDF" />
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+
+        android:layout_below="@id/readBtn">
+
+        <Button
+            android:id="@+id/save_txt_button"
+            android:layout_width="130dp"
+            android:layout_height="wrap_content"
+            android:text="Сохранить в TXT" />
+
+        <Button
+            android:id="@+id/save_binary_button"
+            android:layout_width="130dp"
+            android:layout_height="wrap_content"
+            android:text="Сохранить в бин файла" />
+
+        <Button
+            android:id="@+id/save_pdf_button"
+            android:layout_width="130dp"
+            android:layout_height="wrap_content"
+            android:text="Сохранить в PDF" />
+    </LinearLayout>
+
+</RelativeLayout>
