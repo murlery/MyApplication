@@ -64,6 +64,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.constraintlayout)
     val pdfboxVersion = "2.0.27" // или последняя версия
 
     implementation("org.apache.pdfbox:pdfbox:$pdfboxVersion")
