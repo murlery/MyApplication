@@ -156,11 +156,6 @@ class ChildrenActivity : AppCompatActivity() {
     }
 
     data class Child (var name: String, var birthday: Date): Serializable{
-        companion object {
-            private var nextId = 1
-        }
-
-        val id: Int = nextId++
         override fun toString(): String {
             return "$name, Дата рождения: ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(birthday)}"
         }

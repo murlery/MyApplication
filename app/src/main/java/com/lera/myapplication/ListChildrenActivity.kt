@@ -123,7 +123,7 @@ class ListChildrenActivity: AppCompatActivity() {
         val filename = "children.txt"
         openFileOutput(filename, Context.MODE_PRIVATE).use { output ->
             for (child in children) {
-                val line = "${child.id},${child.name},${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}\n"
+                val line = "${child.name},${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}\n"
                 output.write(line.toByteArray())
             }
         }
@@ -137,10 +137,9 @@ class ListChildrenActivity: AppCompatActivity() {
             openFileInput(filename).use { input ->
                 input.bufferedReader().forEachLine { line ->
                     val parts = line.split(",")
-                    if (parts.size == 3) {
-                        val id = parts[0]
-                        val name = parts[1]
-                        val birthday = SimpleDateFormat("dd.MM.yyyy").parse(parts[2])
+                    if (parts.size == 2) {
+                        val name = parts[0]
+                        val birthday = SimpleDateFormat("dd.MM.yyyy").parse(parts[1])
                         if (birthday != null) {
                             childrenList.add(Child(name, birthday))
                         }
@@ -199,7 +198,7 @@ class ListChildrenActivity: AppCompatActivity() {
         // Записываем данные о детях на страницу
         var yPosition = 25
         for (child in children) {
-            canvas.drawText("ID: ${child.id}, Имя: ${child.name}, Дата рождения: ${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}", 10f, yPosition.toFloat(), paint)
+            canvas.drawText("Имя: ${child.name}, Дата рождения: ${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}", 10f, yPosition.toFloat(), paint)
             yPosition += 20 // Увеличиваем позицию по Y для следующей строки
         }
 
@@ -246,8 +245,6 @@ class ListChildrenActivity: AppCompatActivity() {
 
         var y = 50f
         for ((index, child) in children.withIndex()) {
-            canvas.drawText("ID: ${child.id}", 50f, y, paint)
-            y += 20f
             canvas.drawText("Имя: ${child.name}", 50f, y, paint)
             y += 20f
             canvas.drawText("Дата рождения: ${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}", 50f, y, paint)
@@ -296,7 +293,7 @@ class ListChildrenActivity: AppCompatActivity() {
             document.close()
 
             val lines = text.lines()
-            val dateFormat = SimpleDateFormat("ID: \\d+, Имя: \\w+, Дата рождения: (\\d{2}\\.\\d{2}\\.\\d{4})", Locale.getDefault())
+            val dateFormat = SimpleDateFormat("Имя: \\w+, Дата рождения: (\\d{2}\\.\\d{2}\\.\\d{4})", Locale.getDefault())
             for (line in lines) {
                 val matcher = dateFormat.toPattern().toRegex().find(line)
 
@@ -304,7 +301,7 @@ class ListChildrenActivity: AppCompatActivity() {
                     val dateString = it.groupValues[1]
                     try {
                         val date = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(dateString)
-                        val id = line.substringAfter("ID: ").substringBefore(",")
+
                         val name = line.substringAfter("Имя: ").substringBefore(", Дата рождения")
 
                         childrenList.add(Child(name, date))
