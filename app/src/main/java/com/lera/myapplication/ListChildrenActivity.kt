@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.os.Bundle
 import android.os.Environment
+import android.util.Log
 import android.view.ContextMenu
 import android.view.Menu
 import android.view.MenuItem
@@ -96,7 +97,7 @@ class ListChildrenActivity: AppCompatActivity() {
 
         // Обработчики нажатий для сохранения данных
         saveTxtButton.setOnClickListener { saveChildrenToTxtFile() }
-        saveBinaryButton.setOnClickListener { saveChildrenToBinaryFile() }
+        saveBinaryButton.setOnClickListener { saveChildrenToBinaryFile2() }
         //savePdfButton.setOnClickListener { saveChildrenToPdfFile() }
         // Обработчики нажатий для загрузки данных
         loadTxtButton.setOnClickListener {
@@ -152,6 +153,66 @@ class ListChildrenActivity: AppCompatActivity() {
 
         return childrenList
     }
+    private fun saveChildrenToBinaryFile1() {
+        val filename = "children.dat"
+        val directory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+
+        Log.d("DirectoryPath", directory.absolutePath) // Лог для проверки пути
+
+        // Создаем директорию, если она не существует
+        if (!directory.exists()) {
+            if (!directory.mkdirs() && !directory.exists()) {
+                Toast.makeText(this, "Не удалось создать директорию: ${directory.absolutePath}", Toast.LENGTH_SHORT).show()
+                return
+            }
+        } else if (!directory.isDirectory) {
+            Toast.makeText(this, "Путь не является директорией: ${directory.absolutePath}", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val file = File(directory, filename)
+
+        try {
+            // Создаем выходной поток для записи данных
+            file.outputStream().use { output ->
+                ObjectOutputStream(output).use { oos ->
+                    oos.writeObject(children)
+                }
+            }
+            Toast.makeText(this, "Файл сохранен: ${file.absolutePath}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Ошибка при сохранении файла: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+    private fun saveChildrenToBinaryFile2() {
+        val filename = "children.dat"
+
+        // Получаем путь к директории приложения во внешнем хранилище
+        val directory = getExternalFilesDir(null)
+
+        // Проверяем, что директория существует
+        if (directory != null && !directory.exists()) {
+            directory.mkdirs() // Создаем директорию, если она не существует
+        }
+
+        // Создаем файл в указанной директории
+        val file = File(directory, filename)
+
+        try {
+            // Записываем данные в файл
+            FileOutputStream(file).use { output ->
+                ObjectOutputStream(output).use { oos ->
+                    oos.writeObject(children)
+                }
+            }
+            Toast.makeText(this, "Файл сохранен: ${file.absolutePath}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Ошибка при сохранении файла: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
 
     private fun saveChildrenToBinaryFile() {
         val filename = "children.dat"
