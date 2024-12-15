@@ -1,9 +1,14 @@
 package com.lera.myapplication
 import androidx.recyclerview.widget.RecyclerView.OnItemTouchListener
 import ChildListAdapter
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
 import android.os.Bundle
+import android.os.Environment
 import android.view.ContextMenu
 import android.view.Menu
 import android.view.MenuItem
@@ -16,12 +21,17 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.ui.text.font.Typeface
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.lera.myapplication.ChildrenActivity.Child
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.io.Serializable
@@ -29,6 +39,8 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.text.PDFTextStripper
 
 class ListChildrenActivity: AppCompatActivity() {
     private lateinit var login: String;
@@ -97,6 +109,14 @@ class ListChildrenActivity: AppCompatActivity() {
             children.addAll(loadChildrenFromBinaryFile())
             adapter.notifyDataSetChanged()
         }
+        savePdfButton.setOnClickListener{
+            saveToPDF(this)
+
+        }
+        loadPdfButton.setOnClickListener {
+            openPdfFile(this, "data")
+
+        }
 
     }
     private fun saveChildrenToTxtFile() {
@@ -156,6 +176,150 @@ class ListChildrenActivity: AppCompatActivity() {
             emptyList()
         }
     }
+    fun saveToPDF(context: Context) {
+        try {
+            savePdfToInternalStorage(context, "data")
+        } catch (e: IOException) {
+            Toast.makeText(context, "Ошибка при сохранении PDF: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    fun saveListToPDF() {
+
+
+        // Создаем новый PDF-документ
+        val pdfDocument = PdfDocument()
+        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // A4 размер
+        val page = pdfDocument.startPage(pageInfo)
+
+        // Получаем объект Canvas для рисования на странице
+        val canvas = page.canvas
+        val paint = Paint()
+        paint.textSize = 12f
+
+        // Записываем данные о детях на страницу
+        var yPosition = 25
+        for (child in children) {
+            canvas.drawText("ID: ${child.id}, Имя: ${child.name}, Дата рождения: ${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}", 10f, yPosition.toFloat(), paint)
+            yPosition += 20 // Увеличиваем позицию по Y для следующей строки
+        }
+
+        // Завершаем страницу и добавляем ее в документ
+        pdfDocument.finishPage(page)
+
+        // Сохраняем документ в файл
+        val pdfFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "children_list.pdf")
+        try {
+            pdfDocument.writeTo(FileOutputStream(pdfFile))
+            Toast.makeText(this, "PDF сохранен: ${pdfFile.absolutePath}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Ошибка при сохранении PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+            pdfDocument.close()
+        }
+
+        val pdfFile1 = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "children_list.pdf")
+        try {
+            pdfDocument.writeTo(FileOutputStream(pdfFile1))
+            if (pdfFile1.exists()) {
+                Toast.makeText(this, "PDF сохранен: ${pdfFile1.absolutePath}", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Ошибка: файл не создан", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Ошибка при сохранении PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+            pdfDocument.close()
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun savePdfToInternalStorage(context: Context, fileName: String) {
+        val pdfDocument = PdfDocument()
+        val paint = Paint()
+        paint.textSize = 12f
+
+        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+        val page = pdfDocument.startPage(pageInfo)
+        val canvas = page.canvas
+
+        var y = 50f
+        for ((index, child) in children.withIndex()) {
+            canvas.drawText("ID: ${child.id}", 50f, y, paint)
+            y += 20f
+            canvas.drawText("Имя: ${child.name}", 50f, y, paint)
+            y += 20f
+            canvas.drawText("Дата рождения: ${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}", 50f, y, paint)
+            y += 40f
+        }
+        pdfDocument.finishPage(page)
+
+        val file = File(context.filesDir, "$fileName.pdf")
+        if (file.exists()) file.delete()
+        pdfDocument.writeTo(FileOutputStream(file))
+        pdfDocument.close()
+
+        Toast.makeText(context, "PDF сохранен в ${file.absolutePath}", Toast.LENGTH_LONG).show()
+    }
+
+    private fun openPdfFile(context: Context, fileName: String) {
+        val file = File(context.filesDir, "$fileName.pdf")
+        if (!file.exists()) {
+            Toast.makeText(context, "Файл не найден", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file) //Requires adding FileProvider to manifest
+
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.setDataAndType(uri, "application/pdf")
+        intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "Нет приложения для открытия PDF", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun readChildrenFromPDF(context: Context, pdfFilePath: String): List<Child> {
+        val childrenList = mutableListOf<Child>()
+        try {
+            val pdfFile = File(pdfFilePath)
+            if (!pdfFile.exists()) {
+                Toast.makeText(this, "нет такого", Toast.LENGTH_SHORT).show()
+                return childrenList //возвращает пустой список, если файл не существует
+            }
+            val document = PDDocument.load(pdfFile)
+            val stripper = PDFTextStripper()
+            val text = stripper.getText(document)
+            document.close()
+
+            val lines = text.lines()
+            val dateFormat = SimpleDateFormat("ID: \\d+, Имя: \\w+, Дата рождения: (\\d{2}\\.\\d{2}\\.\\d{4})", Locale.getDefault())
+            for (line in lines) {
+                val matcher = dateFormat.toPattern().toRegex().find(line)
+
+                matcher?.let {
+                    val dateString = it.groupValues[1]
+                    try {
+                        val date = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(dateString)
+                        val id = line.substringAfter("ID: ").substringBefore(",")
+                        val name = line.substringAfter("Имя: ").substringBefore(", Дата рождения")
+
+                        childrenList.add(Child(name, date))
+                    } catch (e: ParseException) {
+                        //Обработка исключений
+                        e.printStackTrace()
+                    }
+                }
+
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+        return childrenList
+    }
 
     private fun showEditChildDialog(position: Int) {
         // Получаем данные ребенка по позиции
@@ -207,6 +371,7 @@ class ListChildrenActivity: AppCompatActivity() {
 
         dialog.show()
     }
+
 
 
     private fun showAddChildDialog() {
