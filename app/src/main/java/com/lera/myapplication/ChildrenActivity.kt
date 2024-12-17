@@ -2,6 +2,7 @@ package com.lera.myapplication
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -13,7 +14,10 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import java.io.Serializable
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -27,21 +31,27 @@ class ChildrenActivity : AppCompatActivity() {
     private lateinit var addChildButton: Button;
     private lateinit var nextChildButton: Button;
     private var childrenList = mutableListOf<Child>() // Список детей
-    private lateinit var login: String;
+//    private lateinit var login: String
+    private lateinit var childDao: ChildDao
+    private lateinit var user: User
 
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     @SuppressLint("MissingInflatedId")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_children)
 
+        childDao = AppDatabase.getDatabase(this).childDao()
+
         // Получаем логин из Intent
-        login = intent.getStringExtra("login") ?: "" //  Используем пустую строку, если login не найден
+        user = intent.getSerializableExtra("user") as User
+//        login = intent.getStringExtra("login") ?: "" //  Используем пустую строку, если login не найден
         // Получаем список детей из Intent
         childrenList = intent.getSerializableExtra("children") as? MutableList<Child> ?: mutableListOf()
         // Находим TextView и устанавливаем текст приветствия
         val welcomeTextView = findViewById<TextView>(R.id.welcomeTextView)
-        welcomeTextView.text = "Привет, $login!"
+        welcomeTextView.text = "Привет, ${user.login}!"
         nameChildEditText = findViewById(R.id.nameChildEditText)
         birthdayChildEditText = findViewById(R.id.birthdayChildEditText)
         addChildCheckbox = findViewById(R.id.childCheckbox)
@@ -58,11 +68,16 @@ class ChildrenActivity : AppCompatActivity() {
 
         addChildButton.setOnClickListener {
 
-                  addChild()
-                  }
-
-
+            addChild()
+        }
     }
+
+    private fun saveChildToDb(child: Child){
+        lifecycleScope.launch {
+            childDao.insert(child)
+        }
+    }
+
     // Функция для добавления ребенка в список
     private fun addChild() {
         if (addChildCheckbox.isChecked) {
@@ -105,8 +120,9 @@ class ChildrenActivity : AppCompatActivity() {
                     }
 
                     // Создаем объект Child и добавляем его в список
-                    val child = Child(nameChild,  date)
+                    val child = Child(user.id, nameChild,  date)
                     childrenList.add(child)
+                    saveChildToDb(child)
                     nameChildEditText.setText("")
                     birthdayChildEditText.setText("")
                     addChildCheckbox.isChecked = false
@@ -120,13 +136,13 @@ class ChildrenActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "Выберите галочку", Toast.LENGTH_SHORT).show()
         }
-       // supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        // supportActionBar?.setDisplayHomeAsUpEnabled(true)
         // Устанавливаем обработчик для скрытия клавиатуры при нажатии на экран
         findViewById<View>(android.R.id.content).setOnClickListener {
             hideKeyboard()
         }
 
-}
+    }
     // Функция для скрытия клавиатуры
     private fun hideKeyboard() {
         val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -146,7 +162,7 @@ class ChildrenActivity : AppCompatActivity() {
             }
             R.id.action_list_children -> {
                 val intent = Intent(this, ListChildrenActivity::class.java)
-                intent.putExtra("login", login) // Передаем логин
+                intent.putExtra("user", user as Serializable) // Передаем user
                 intent.putExtra("children", childrenList as Serializable)
                 startActivity(intent)
                 true
@@ -155,9 +171,5 @@ class ChildrenActivity : AppCompatActivity() {
         }
     }
 
-    data class Child (var name: String, var birthday: Date): Serializable{
-        override fun toString(): String {
-            return "$name, Дата рождения: ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(birthday)}"
-        }
-    }}
+}
 

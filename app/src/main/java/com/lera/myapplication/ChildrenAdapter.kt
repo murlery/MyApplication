@@ -6,20 +6,19 @@ import android.view.View // Базовый класс для всех View в An
 import android.view.ViewGroup // Класс, представляющий собой контейнер для View
 import android.widget.TextView // Класс для отображения текста
 import androidx.recyclerview.widget.RecyclerView // Класс для работы с RecyclerView
+import com.lera.myapplication.Child
 import com.lera.myapplication.ChildrenActivity // Ваш класс Activity, содержащий данные о детях
 import com.lera.myapplication.R // Ваш файл ресурсов
 import java.text.SimpleDateFormat // Класс для форматирования даты
 import java.util.Date
 import java.util.Locale // Класс для работы с настройками региона
 
-class ChildListAdapter(private var children: MutableList<ChildrenActivity.Child>) : RecyclerView.Adapter<ChildListAdapter.ViewHolder>() {
+class ChildListAdapter(private var children: MutableList<Child>) : RecyclerView.Adapter<ChildListAdapter.ViewHolder>() {
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView){
 
         val nameTextView: TextView = itemView.findViewById(R.id.childName)
         val birthDateTextView: TextView = itemView.findViewById(R.id.childBirthDate)
-
-
     }
 
     companion object {
@@ -50,7 +49,7 @@ class ChildListAdapter(private var children: MutableList<ChildrenActivity.Child>
         notifyItemRemoved(position)
     }
     // Метод для получения ребенка по позиции
-    fun getChildAtPosition(position: Int): ChildrenActivity.Child {
+    fun getChildAtPosition(position: Int): Child {
         return children[position]
     }
 
