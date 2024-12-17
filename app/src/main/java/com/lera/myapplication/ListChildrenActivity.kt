@@ -89,7 +89,11 @@ class ListChildrenActivity: AppCompatActivity() {
 
         var initialY: Float = 0f
         var isSwipingUp: Boolean = false
-// Инициализация кнопок
+
+
+
+
+        // Инициализация кнопок
         val saveTxtButton: Button = findViewById(R.id.save_txt_button)
         val saveBinaryButton: Button = findViewById(R.id.save_binary_button)
         val savePdfButton: Button = findViewById(R.id.save_pdf_button)
@@ -101,7 +105,8 @@ class ListChildrenActivity: AppCompatActivity() {
         // Обработчики нажатий для сохранения данных
         saveTxtButton.setOnClickListener { saveChildrenToTxtFile() }
         saveBinaryButton.setOnClickListener { saveChildrenToBinaryFile2() }
-        //savePdfButton.setOnClickListener { saveChildrenToPdfFile() }
+        savePdfButton.setOnClickListener{ saveToPDF(this) }
+
         // Обработчики нажатий для загрузки данных
         loadTxtButton.setOnClickListener {
             for (child in children) {
@@ -119,10 +124,7 @@ class ListChildrenActivity: AppCompatActivity() {
             children.addAll(loadChildrenFromBinaryFile())
             adapter.notifyDataSetChanged()
         }
-        savePdfButton.setOnClickListener{
-            saveToPDF(this)
 
-        }
         loadPdfButton.setOnClickListener {
             openPdfFile(this, "data")
 
@@ -131,9 +133,12 @@ class ListChildrenActivity: AppCompatActivity() {
     }
 
     private fun loadChildrenFromDbAndShow(){
+        // новый поток для выполнения операции с базой данных
         Thread {
+            // список детей из базы данных
             children = childDao.getAll(user.id).toMutableList()
             adapter = ChildListAdapter(children)
+            // обновление UI в основном потоке.
             runOnUiThread {
                 recyclerView.adapter = adapter
             }
@@ -141,6 +146,7 @@ class ListChildrenActivity: AppCompatActivity() {
     }
 
     private fun saveChildToDb(child: Child){
+        // Запускаем корутину в жизненном цикле компонента
         lifecycleScope.launch {
             childDao.insert(child)
         }
@@ -161,6 +167,8 @@ class ListChildrenActivity: AppCompatActivity() {
 
     private fun saveChildrenToTxtFile() {
         val filename = "children.txt"
+        // Открываем файл для записи в режиме PRIVATE (только для этого приложения).
+        // use гарантирует, что файл будет закрыт после завершения работы с ним, даже если возникнут исключения.
         openFileOutput(filename, Context.MODE_PRIVATE).use { output ->
             for (child in children) {
                 val line = "${child.id},${child.user},${child.name},${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}\n"
@@ -174,9 +182,11 @@ class ListChildrenActivity: AppCompatActivity() {
         val childrenList = mutableListOf<Child>()
 
         try {
+            // Открываем файл для чтения. use гарантирует закрытие файла.
             openFileInput(filename).use { input ->
                 input.bufferedReader().forEachLine { line ->
-                    val parts = line.split(",")
+                    val parts = line.split(",")// Разделяем строку на части по запятым.
+
                     if (parts.size == 4) {
                         val id = parts[0].toInt()
                         val loadedUser = parts[1].toInt()
@@ -203,7 +213,7 @@ class ListChildrenActivity: AppCompatActivity() {
     private fun saveChildrenToBinaryFile2() {
         val filename = "children.dat"
 
-        // Получаем путь к директории приложения во внешнем хранилище
+        // Получаем путь к директории приложения
         val directory = getExternalFilesDir(null)
 
         // Проверяем, что директория существует
@@ -229,21 +239,15 @@ class ListChildrenActivity: AppCompatActivity() {
     }
 
 
-    private fun saveChildrenToBinaryFile() {
-        val filename = "children.dat"
-
-        File(getExternalFilesDir(null), filename).outputStream().use { output ->
-            ObjectOutputStream(output).use { oos ->
-                oos.writeObject(children)
-            }
-        }
-    }
 
     private fun loadChildrenFromBinaryFile(): List<Child> {
         val filename = "children.dat"
-
+        //FileInputStream(...) открывает поток ввода для чтения из этого файла
+        //ObjectInputStream(...) оборачивает этот поток ввода, чтобы можно было читать объекты,
+        // которые были сериализованы (записаны) в этом файле.
         return try {
             ObjectInputStream(FileInputStream(File(getExternalFilesDir(null), filename))).use { ois ->
+                // Читаем объект из потока и приводим его к типу List<Child>
                 ois.readObject() as List<Child>
             }
         } catch (e: Exception) {
@@ -251,49 +255,25 @@ class ListChildrenActivity: AppCompatActivity() {
             emptyList()
         }
     }
-    fun saveToPDFToInternalStorage(context: Context) {
-        try {
-            savePdfToInternalStorage(context, "data")
-        } catch (e: IOException) {
-            Toast.makeText(context, "Ошибка при сохранении PDF: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-
-    @Throws(IOException::class)
-    private fun savePdfToInternalStorage(context: Context, fileName: String) {
-        val pdfDocument = PdfDocument()
-        val paint = Paint()
-        paint.textSize = 12f
-
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-        val page = pdfDocument.startPage(pageInfo)
-        val canvas = page.canvas
-
-        var y = 50f
-        for ((index, child) in children.withIndex()) {
-            canvas.drawText("Имя: ${child.name}", 50f, y, paint)
-            y += 20f
-            canvas.drawText("Дата рождения: ${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}", 50f, y, paint)
-            y += 40f
-        }
-        pdfDocument.finishPage(page)
-
-        val file = File(context.filesDir, "$fileName.pdf")
-        if (file.exists()) file.delete()
-        pdfDocument.writeTo(FileOutputStream(file))
-        pdfDocument.close()
-
-        Toast.makeText(context, "PDF сохранен в ${file.absolutePath}", Toast.LENGTH_LONG).show()
-    }
-
 
     private fun openPdfFile(context: Context, fileName: String) {
-        // Теперь мы ищем файл по имени в Shared Storage
+
+        //Массив строк, указывающий, какие колонки из базы данных медиафайлов мы хотим получить
+        // запрашиваем только идентификатор файла
         val projection = arrayOf(MediaStore.MediaColumns._ID)
+
+        // Строка, представляющая условие выборки
+        // ищем файл с именем, соответствующим заданному имени (используется параметр ? для безопасной подстановки)
         val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+
+        //Массив аргументов для условия выборки
+        // добавляем расширение .pdf к имени файла
         val selectionArgs = arrayOf("$fileName.pdf")
 
+
+        //Cursor — это интерфейс, который предоставляет доступ к данным, полученным из базы данных или другого источника данных.
+        // Он представляет собой набор строк (записей), которые могут быть обработаны по одной за раз.
+        // Выполняем запрос к контент-провайдеру для получения курсора с результатами
         val cursor = context.contentResolver.query(
             MediaStore.Files.getContentUri("external"),
             projection,
@@ -302,16 +282,20 @@ class ListChildrenActivity: AppCompatActivity() {
             null
         )
 
+        // Проверяем, успешно ли выполнен запрос и есть ли результаты
         if (cursor != null && cursor.moveToFirst()) {
             val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
             val uri = Uri.withAppendedPath(MediaStore.Files.getContentUri("external"), id.toString())
 
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.setDataAndType(uri, "application/pdf")
-            intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // интент для открытия PDF-файла
+
+            val intent = Intent(Intent.ACTION_VIEW)//Это предопределенное действие, которое указывает, что вы хотите просмотреть данные
+            intent.setDataAndType(uri, "application/pdf")// тип содержимого как PDF
+            intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION// Запрашиваем разрешение на чтение URI
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)// Добавляем флаг для запуска новой задачи
 
             try {
+                // Пытаемся запустить активность для открытия PDF-файла
                 context.startActivity(intent)
             } catch (e: ActivityNotFoundException) {
                 Toast.makeText(context, "Нет приложения для открытия PDF", Toast.LENGTH_SHORT).show()
@@ -319,7 +303,7 @@ class ListChildrenActivity: AppCompatActivity() {
         } else {
             Toast.makeText(context, "Файл не найден", Toast.LENGTH_SHORT).show()
         }
-
+        // Закрываем курсор, чтобы избежать утечек памяти
         cursor?.close()
     }
 

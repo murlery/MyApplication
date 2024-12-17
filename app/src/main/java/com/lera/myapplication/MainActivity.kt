@@ -31,19 +31,22 @@ class MainActivity : AppCompatActivity() {
         nameInput = findViewById(R.id.name_input)
         passwordInput = findViewById(R.id.password_input)
 
+        //экземпляр UserDao для работы с таблицей пользователей
         userDao = AppDatabase.getDatabase(this).userDao()
 
 
         loginButton.setOnClickListener {
             Thread {
                 try {
+                    // Получаем учетные данные пользователя из базы данных по введенному логину и паролю
                     val user = userDao.getByLoginAndPass(
-                        nameInput.text.toString(),
-                        passwordInput.text.toString()
+                        nameInput.text.toString(),//логин
+                        passwordInput.text.toString()//пароль
                     )
                     if (user == null){
                         throw Exception("Неверные учетные данные")
                     }
+                    // Если пользователь найден, выполняем код на главном (UI) потоке
                     runOnUiThread {
                         Toast.makeText(applicationContext, "Вход выполнен", Toast.LENGTH_SHORT).show()
                         val intent = Intent(applicationContext, ChildrenActivity::class.java)
@@ -59,26 +62,7 @@ class MainActivity : AppCompatActivity() {
             }.start()
 
 
-//            // Проверка учетных данных
-//            if (nameInput.text.toString() == "lera" && passwordInput.text.toString() == "a") {
-//                Toast.makeText(this, "Вход выполнен", Toast.LENGTH_SHORT).show()
-//
-//                // Получаем введенный логин
-//                val login = nameInput.text.toString()
-//
-//                // Переходим к следующей активности, передавая логин
-//                val intent = Intent(this, ChildrenActivity::class.java)
-//                intent.putExtra("login", login)
-//                startActivity(intent)
-//
-//                // Очищаем поля ввода
-//                nameInput.setText("")
-//                passwordInput.setText("")
-//
-//
-//            } else {
-//                Toast.makeText(this, "Неверные учетные данные", Toast.LENGTH_SHORT).show()
-//            }
+
         }
 
         // Устанавливаем обработчик для скрытия клавиатуры при нажатии на экран
