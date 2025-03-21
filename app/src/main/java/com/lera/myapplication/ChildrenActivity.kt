@@ -17,7 +17,11 @@ import androidx.activity.ComponentActivity
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.Serializable
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -31,13 +35,18 @@ class ChildrenActivity : AppCompatActivity() {
     private lateinit var addChildButton: Button;
     private lateinit var nextChildButton: Button;
     private var childrenList = mutableListOf<Child>() // Список детей
-//    private lateinit var login: String
     private lateinit var childDao: ChildDao
     private lateinit var user: User
+    private var job: Job? = null  // Для управления корутинами
+    private var ioJob: Job? = null // Job для работы с IO
+    private val computationJob = Job() // Job для вычислений
+    private val computationScope = CoroutineScope(Dispatchers.Default + computationJob)
 
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     @SuppressLint("MissingInflatedId")
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_children)
@@ -46,7 +55,7 @@ class ChildrenActivity : AppCompatActivity() {
 
         // Получаем логин из Intent
         user = intent.getSerializableExtra("user") as User
-//        login = intent.getStringExtra("login") ?: "" //  Используем пустую строку, если login не найден
+
         // Получаем список детей из Intent
         childrenList = intent.getSerializableExtra("children") as? MutableList<Child> ?: mutableListOf()
         // Находим TextView и устанавливаем текст приветствия
@@ -72,81 +81,101 @@ class ChildrenActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveChildToDb(child: Child){
-        lifecycleScope.launch {
-            childDao.insert(child)
-        }
-    }
-
     // Функция для добавления ребенка в список
+    // Функция для добавления ребенка
     private fun addChild() {
-        if (addChildCheckbox.isChecked) {
-            val nameChild = nameChildEditText.text.toString()
-
-            val birthdayChild = birthdayChildEditText.text.toString()
-
-            // Проверяем, что поля заполнены
-            if (nameChild.isNotEmpty() && birthdayChild.isNotEmpty()) {
-                // Преобразуем дату рождения в Date объект
-                val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-                try {
-                    val date = dateFormat.parse(birthdayChild)
-                    // Проверяем, что дата не больше текущей
-                    val currentDate = Calendar.getInstance().time
-                    if (date.after(currentDate)) {
-                        Toast.makeText(this, "Некорректная дата рождения", Toast.LENGTH_SHORT).show()
-                        return
-                    }
-                    // Проверяем, что дата корректна
-                    val calendar = Calendar.getInstance()
-                    calendar.time = date
-
-                    val day = calendar.get(Calendar.DAY_OF_MONTH)
-                    val month = calendar.get(Calendar.MONTH) + 1 // Месяцы начинаются с 0
-                    val year = calendar.get(Calendar.YEAR)
-
-                    if (day != dateFormat.format(date).split(".")[0].toInt() ||
-                        month != dateFormat.format(date).split(".")[1].toInt() ||
-                        year != dateFormat.format(date).split(".")[2].toInt()) {
-                        Toast.makeText(this, "Некорректная дата", Toast.LENGTH_SHORT).show()
-                        return
-                    }
-
-                    // Проверяем, что год рождения не выше текущего года
-                    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-                    if (year > currentYear) {
-                        Toast.makeText(this, "Год рождения не может быть выше текущего года", Toast.LENGTH_SHORT).show()
-                        return
-                    }
-
-                    // Создаем объект Child и добавляем его в список
-                    val child = Child(user.id, nameChild,  date)
-                    childrenList.add(child)
-                    saveChildToDb(child)
-                    nameChildEditText.setText("")
-                    birthdayChildEditText.setText("")
-                    addChildCheckbox.isChecked = false
-
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Неверный формат даты рождения", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                Toast.makeText(this, "Заполните все поля", Toast.LENGTH_SHORT).show()
-            }
-        } else {
+        if (!addChildCheckbox.isChecked) {
             Toast.makeText(this, "Выберите галочку", Toast.LENGTH_SHORT).show()
-        }
-        // supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        // Устанавливаем обработчик для скрытия клавиатуры при нажатии на экран
-        findViewById<View>(android.R.id.content).setOnClickListener {
-            hideKeyboard()
+            return
         }
 
+        val nameChild = nameChildEditText.text.toString().trim()
+        val birthdayChild = birthdayChildEditText.text.toString().trim()
+
+        if (nameChild.isEmpty() || birthdayChild.isEmpty()) {
+            Toast.makeText(this, "Заполните все поля", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Используем Dispatchers.Default для обработки даты
+        computationScope.launch {
+            val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+
+            val date: Date? = try {
+                dateFormat.parse(birthdayChild)
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@ChildrenActivity, "Неверный формат даты", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+
+            if (date == null) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@ChildrenActivity, "Ошибка обработки даты", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+
+            val currentDate = Calendar.getInstance().time
+            if (date.after(currentDate)) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@ChildrenActivity, "Некорректная дата рождения", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+
+            val calendar = Calendar.getInstance().apply { time = date }
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            if (calendar.get(Calendar.YEAR) > currentYear) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@ChildrenActivity, "Год рождения не может быть выше текущего года", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+
+            val child = Child(user.id, nameChild, date)
+
+            // Переключаемся на IO-контекст для сохранения в БД
+            ioJob?.cancel()
+            ioJob = lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    childDao.insert(child)
+                    withContext(Dispatchers.Main) {
+                        childrenList.add(child)
+                        Toast.makeText(this@ChildrenActivity, "Ребенок добавлен!", Toast.LENGTH_SHORT).show()
+                        clearFields()
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@ChildrenActivity, "Ошибка при добавлении ребенка: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
     }
-    // Функция для скрытия клавиатуры
+
+    // Функция очистки полей ввода
+    private fun clearFields() {
+        nameChildEditText.text.clear()
+        birthdayChildEditText.text.clear()
+        addChildCheckbox.isChecked = false
+        hideKeyboard()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ioJob?.cancel() // Отменяем IO-задачу
+        computationJob.cancel() // Отменяем вычислительный контекст
+    }
+
+    // Универсальная функция для скрытия клавиатуры
     private fun hideKeyboard() {
-        val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-        inputMethodManager.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
+        val view = currentFocus
+        if (view != null) {
+            val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
+        }
     }
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)

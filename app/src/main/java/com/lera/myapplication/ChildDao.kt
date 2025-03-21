@@ -23,5 +23,5 @@ interface ChildDao {
     suspend fun delete(child: Child)
 
     @Query("Select * from childs_table WHERE user=:user order by id ASC")// Запрос для получения всех детей, принадлежащих указанному пользователю, отсортированных по id.
-    fun getAll(user: Int): List<Child>
+    suspend fun getAll(user: Int): List<Child>
 }

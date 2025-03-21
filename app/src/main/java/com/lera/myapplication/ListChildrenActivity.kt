@@ -25,7 +25,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -37,6 +44,7 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.coroutines.cancellation.CancellationException
 
 
 class ListChildrenActivity: AppCompatActivity() {
@@ -48,20 +56,16 @@ class ListChildrenActivity: AppCompatActivity() {
     private lateinit var adapter: ChildListAdapter
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var childDao: ChildDao
+    private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())//для задач с БД и файлами
+    private val computationScope = CoroutineScope(Dispatchers.Default + Job())//для обработки данных (преобразования строк в объекты Child)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.list_children_activity)
 
-        // Получаем список детей из Intent
-//        children = (intent.getSerializableExtra("children") as ArrayList<Child>?)!!
-        // Получаем логин из Intent
-
         childDao = AppDatabase.getDatabase(this).childDao()
 
-//        login = intent.getStringExtra("login") ?: "Пусто"
         user = intent.getSerializableExtra("user") as User
-
 
         // Находим TextView для отображения приветствия
         yourChildrenTextView = findViewById(R.id.yourChildrenTextView)
@@ -69,35 +73,29 @@ class ListChildrenActivity: AppCompatActivity() {
 
         // Находим RecyclerView
         recyclerView = findViewById(R.id.childrenRecyclerView)
+
         // Создаем адаптер для RecyclerView
         adapter = ChildListAdapter(children)
+        recyclerView.adapter = adapter
+
         // Устанавливаем горизонтальный LinearLayoutManager
         recyclerView.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+
         // Регистрируем RecyclerView для контекстного меню
         registerForContextMenu(recyclerView)
-
         loadChildrenFromDbAndShow()
-
-
-
         // Настраиваем SwipeRefreshLayout
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout)
         swipeRefreshLayout.setOnRefreshListener {
             showAddChildDialog()
             swipeRefreshLayout.isRefreshing = false // Останавливаем индикатор загрузки
         }
-
         var initialY: Float = 0f
         var isSwipingUp: Boolean = false
-
-
-
-
         // Инициализация кнопок
         val saveTxtButton: Button = findViewById(R.id.save_txt_button)
         val saveBinaryButton: Button = findViewById(R.id.save_binary_button)
         val savePdfButton: Button = findViewById(R.id.save_pdf_button)
-
         val loadTxtButton: Button = findViewById(R.id.load_txt_button)
         val loadBinaryButton: Button = findViewById(R.id.load_binary_button)
         val loadPdfButton: Button = findViewById(R.id.load_pdf_button)
@@ -113,104 +111,121 @@ class ListChildrenActivity: AppCompatActivity() {
                 deleteChildFromDb(child)
             }
             children.clear()
-            children.addAll(loadChildrenFromTxtFile())
+            loadChildrenFromTxtFile()
             for (child in children) {
                 saveChildToDb(child)
             }
             adapter.notifyDataSetChanged()
         }
         loadBinaryButton.setOnClickListener {
-            children.clear()
-            children.addAll(loadChildrenFromBinaryFile())
-            adapter.notifyDataSetChanged()
+            loadChildrenFromBinaryFile()
         }
-
         loadPdfButton.setOnClickListener {
             openPdfFile(this, "data")
-
         }
-
     }
+    private fun loadChildrenFromDbAndShow() {
+        ioScope.launch {
+            val childrenList = childDao.getAll(user.id)
 
-    private fun loadChildrenFromDbAndShow(){
-        // новый поток для выполнения операции с базой данных
-        Thread {
-            // список детей из базы данных
-            children = childDao.getAll(user.id).toMutableList()
-            adapter = ChildListAdapter(children)
-            // обновление UI в основном потоке.
-            runOnUiThread {
-                recyclerView.adapter = adapter
+            withContext(Dispatchers.Main) {
+
+                children.addAll(childrenList)
+                adapter.notifyDataSetChanged() // Уведомляем адаптер об изменениях
             }
-        }.start()
+        }
     }
-
     private fun saveChildToDb(child: Child){
-        // Запускаем корутину в жизненном цикле компонента
-        lifecycleScope.launch {
+        ioScope.launch {
             childDao.insert(child)
         }
     }
-
     private fun updateChildInDb(child: Child){
-        lifecycleScope.launch {
+        ioScope.launch {
             childDao.update(child)
         }
     }
 
     private fun deleteChildFromDb(child: Child){
-        lifecycleScope.launch {
+        ioScope.launch {
             childDao.delete(child)
         }
     }
-
-
     private fun saveChildrenToTxtFile() {
-        val filename = "children.txt"
-        // Открываем файл для записи в режиме PRIVATE (только для этого приложения).
-        // use гарантирует, что файл будет закрыт после завершения работы с ним, даже если возникнут исключения.
-        openFileOutput(filename, Context.MODE_PRIVATE).use { output ->
-            for (child in children) {
-                val line = "${child.id},${child.user},${child.name},${SimpleDateFormat("dd.MM.yyyy").format(child.birthday)}\n"
-                output.write(line.toByteArray())
-            }
-        }
-    }
+        ioScope.launch {
+            val filename = "children.txt"
+            val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
 
-    private fun loadChildrenFromTxtFile(): List<Child> {
-        val filename = "children.txt"
-        val childrenList = mutableListOf<Child>()
-
-        try {
-            // Открываем файл для чтения. use гарантирует закрытие файла.
-            openFileInput(filename).use { input ->
-                input.bufferedReader().forEachLine { line ->
-                    val parts = line.split(",")// Разделяем строку на части по запятым.
-
-                    if (parts.size == 4) {
-                        val id = parts[0].toInt()
-                        val loadedUser = parts[1].toInt()
-                        if (loadedUser == user.id){
-                            val name = parts[2]
-                            val birthday = SimpleDateFormat("dd.MM.yyyy").parse(parts[3])
-                            if (birthday != null) {
-                                val loadedChild = Child(loadedUser, name, birthday)
-                                loadedChild.id = id
-                                childrenList.add(loadedChild)
-                            }
+            try {
+                withTimeout(5000) { // Тайм-аут 5 секунд
+                    openFileOutput(filename, Context.MODE_PRIVATE).use { output ->
+                        for (child in children) {
+                            val line = "${child.id},${child.user},${child.name},${dateFormat.format(child.birthday)}\n"
+                            output.write(line.toByteArray()) // Запись строки
                         }
                     }
                 }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@ListChildrenActivity, "Файл сохранен", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    val message = if (e is CancellationException) "Операция прервана (тайм-аут)" else "Ошибка: ${e.message}"
+                    Toast.makeText(this@ListChildrenActivity, message, Toast.LENGTH_SHORT).show()
+                }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
-
-
-        return childrenList
     }
 
+
+
+    private fun loadChildrenFromTxtFile() {
+        ioScope.launch {
+            val filename = "children.txt"
+
+            try {
+                val childrenList = withTimeout(5000) {
+                    val fileContent = openFileInput(filename).bufferedReader().use { it.readText() }
+                    // переключаем на dispatchers.default для парсинга содержимого файла
+                    computationScope.async {
+                        fileContent
+                            .lineSequence()// разбиваем текст на строки
+                            .mapNotNull { line ->
+                                val parts = line.split(",")
+                                if (parts.size == 4) {
+                                    val id = parts[0].toInt()
+                                    val loadedUser = parts[1].toInt()
+                                    if (loadedUser == user.id) {
+                                        val name = parts[2]
+                                        val birthday = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(parts[3])
+                                        // Если дата распознана, создаем объект `Child`, иначе пропускаем строку
+                                        if (birthday != null) Child(loadedUser, name, birthday).apply { this.id = id } else null
+                                    } else null
+                                } else null
+                            }.toList()
+                    }.await() // дожидаемся завершения асинхронной обработки данных
+                }
+
+                withContext(Dispatchers.Main) {
+                    children.clear()
+                    children.addAll(childrenList)
+                    adapter.notifyDataSetChanged()
+                    Toast.makeText(this@ListChildrenActivity, "Файл загружен", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    val message = if (e is CancellationException) "Операция прервана (тайм-аут)" else "Ошибка: ${e.message}"
+                    Toast.makeText(this@ListChildrenActivity, message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+
+
     private fun saveChildrenToBinaryFile2() {
+        ioScope.launch {
         val filename = "children.dat"
 
         // Получаем путь к директории приложения
@@ -231,28 +246,42 @@ class ListChildrenActivity: AppCompatActivity() {
                     oos.writeObject(children)
                 }
             }
-            Toast.makeText(this, "Файл сохранен: ${file.absolutePath}", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@ListChildrenActivity, "Файл сохранен", Toast.LENGTH_SHORT).show()
+            }} catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "Ошибка при сохранении файла: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@ListChildrenActivity, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }}
     }
 
 
 
-    private fun loadChildrenFromBinaryFile(): List<Child> {
-        val filename = "children.dat"
-        //FileInputStream(...) открывает поток ввода для чтения из этого файла
-        //ObjectInputStream(...) оборачивает этот поток ввода, чтобы можно было читать объекты,
-        // которые были сериализованы (записаны) в этом файле.
-        return try {
-            ObjectInputStream(FileInputStream(File(getExternalFilesDir(null), filename))).use { ois ->
-                // Читаем объект из потока и приводим его к типу List<Child>
-                ois.readObject() as List<Child>
+
+    private fun loadChildrenFromBinaryFile() {
+        ioScope.launch {
+            val filename = "children.dat"
+            val file = File(getExternalFilesDir(null), filename)
+
+            try {
+                val childrenList = withTimeout(5000) { // Тайм-аут 5 секунд
+                    ObjectInputStream(FileInputStream(file)).use { ois ->
+                        ois.readObject() as List<Child>
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    children.clear()
+                    children.addAll(childrenList)
+                    adapter.notifyDataSetChanged()
+                    Toast.makeText(this@ListChildrenActivity, "Файл загружен", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    val message = if (e is CancellationException) "Операция прервана (тайм-аут)" else "Ошибка: ${e.message}"
+                    Toast.makeText(this@ListChildrenActivity, message, Toast.LENGTH_SHORT).show()
+                }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
         }
     }
 
@@ -281,7 +310,6 @@ class ListChildrenActivity: AppCompatActivity() {
             selectionArgs,
             null
         )
-
         // Проверяем, успешно ли выполнен запрос и есть ли результаты
         if (cursor != null && cursor.moveToFirst()) {
             val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))

@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     val pdfboxVersion = "2.0.27" // или последняя версия
 
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3") // Или последнюю версию
     implementation("org.apache.pdfbox:pdfbox:$pdfboxVersion")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

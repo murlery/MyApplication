@@ -5,6 +5,9 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.Date
 
 // определяет базу данных Room.
@@ -42,9 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
                     // Вызывается после создания базы данных.
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        // Запускаем в отдельном потоке )
-                        ioThread {
-                            // Получаем экземпляр базы данных и заполняем ее тестовыми данными.
+                        CoroutineScope(Dispatchers.IO).launch {
                             getDatabase(context).userDao().insertList(PREPOPULATE_USERS)
                             getDatabase(context).childDao().insertList(PREPOPULATE_CHILD)
                         }
