@@ -2,91 +2,61 @@ package com.lera.myapplication
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import java.io.Serializable
-import java.util.Date
-import java.util.Locale
-import java.text.SimpleDateFormat
+import kotlinx.coroutines.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.*
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import retrofit2.http.*
+import java.io.File
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.CoroutineContext
+import okhttp3.MediaType.Companion.toMediaType
 
-//class MainActivity : AppCompatActivity() {
-//    private lateinit var loginButton: Button
-//    private lateinit var nameInput: EditText
-//    private lateinit var passwordInput: EditText
-//    private lateinit var userDao: UserDao
-//
-//    override fun onCreate(savedInstanceState: Bundle?) {
-//        super.onCreate(savedInstanceState)
-//        setContentView(R.layout.main_activity)
-//        loginButton = findViewById(R.id.login_button)
-//        nameInput = findViewById(R.id.name_input)
-//        passwordInput = findViewById(R.id.password_input)
-//
-//        //экземпляр UserDao для работы с таблицей пользователей
-//        userDao = AppDatabase.getDatabase(this).userDao()
-//
-//
-//        loginButton.setOnClickListener {
-//            Thread {
-//                try {
-//                    // Получаем учетные данные пользователя из базы данных по введенному логину и паролю
-//                    val user = userDao.getByLoginAndPass(
-//                        nameInput.text.toString(),//логин
-//                        passwordInput.text.toString()//пароль
-//                    )
-//                    if (user == null){
-//                        throw Exception("Неверные учетные данные")
-//                    }
-//                    // Если пользователь найден, выполняем код на главном (UI) потоке
-//                    runOnUiThread {
-//                        Toast.makeText(applicationContext, "Вход выполнен", Toast.LENGTH_SHORT).show()
-//                        val intent = Intent(applicationContext, ChildrenActivity::class.java)
-//                        intent.putExtra("user", user as Serializable)
-//                        intent.putExtra("login", user.login)
-//                        startActivity(intent)
-//                    }
-//                } catch(e : Exception){
-//                    runOnUiThread {
-//                        Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
-//                    }
-//                }
-//            }.start()
-//
-//
-//
-//        }
-//
-//        // Устанавливаем обработчик для скрытия клавиатуры при нажатии на экран
-//        findViewById<View>(android.R.id.content).setOnClickListener {
-//            hideKeyboard()
-//        }
-//    }
-//
-//    // Функция для скрытия клавиатуры
-//    private fun hideKeyboard() {
-//        val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-//        inputMethodManager.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
-//    }
-//
-//
-//}
-class MainActivity : AppCompatActivity() {
+// ----------- Модели данных -----------
+@Serializable
+data class LoginRequest(val email: String, val password: String)
+
+@Serializable
+data class LoginResponse(val token: String)
+
+@Serializable
+data class UserResponse(val data: UserData)
+
+@Serializable
+data class UserData(val id: Int, val email: String, val first_name: String)
+
+
+// ----------- API интерфейс -----------
+interface ApiService {
+    @POST("api/login")
+    suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    @GET("api/users/{id}")
+    suspend fun getUser(@Path("id") id: Int): UserResponse
+}
+
+
+class MainActivity : AppCompatActivity(), CoroutineScope {
+
     private lateinit var loginButton: Button
     private lateinit var nameInput: EditText
     private lateinit var passwordInput: EditText
-    private lateinit var userDao: UserDao
 
-    // Поток для работы с базой данных
-    private var loginThread: Thread? = null
+    private lateinit var apiService: ApiService
+    private var loginJob: Job? = null
+
+    private val job = SupervisorJob()
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         nameInput = findViewById(R.id.name_input)
         passwordInput = findViewById(R.id.password_input)
 
-        userDao = AppDatabase.getDatabase(this).userDao()
+        setupApiService()
 
         loginButton.setOnClickListener {
             loginUser()
@@ -107,39 +77,62 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupApiService() {
+        val cache = Cache(File(applicationContext.cacheDir, "http_cache"), 10 * 1024 * 1024)
+        val contentType = "application/json".toMediaType()
+
+        val client = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .cache(cache)
+            .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BODY
+            })
+            .build()
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://reqres.in/") // тестовый API
+            .client(client)
+            .addConverterFactory(Json { ignoreUnknownKeys = true }.asConverterFactory(contentType))
+            .build()
+
+        apiService = retrofit.create(ApiService::class.java)
+    }
+
     private fun loginUser() {
-        // Если поток уже выполняется – прерываем его
-        loginThread?.interrupt()
+        loginJob?.cancel()
 
-        loginThread = Thread {
+        val email = nameInput.text.toString()
+        val password = passwordInput.text.toString()
+
+        loginJob = launch {
             try {
-                val login = nameInput.text.toString()
-                val password = passwordInput.text.toString()
-
-                // Получаем пользователя из БД (фоновый поток)
-                val user = userDao.getByLoginAndPass(login, password)
-                    ?: throw Exception("Неверные учетные данные")
-
-                // Обновляем UI (главный поток)
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Вход выполнен", Toast.LENGTH_SHORT).show()
-                    val intent = Intent(applicationContext, ChildrenActivity::class.java)
-                    intent.putExtra("user", user as Serializable)
-                    intent.putExtra("login", user.login)
-                    startActivity(intent)
+                val loginResponse = withContext(Dispatchers.IO) {
+                    apiService.login(LoginRequest(email, password))
                 }
+
+                val userResponse = withContext(Dispatchers.IO) {
+                    apiService.getUser(2) // получаем произвольного пользователя (например, id = 2)
+                }
+
+                Toast.makeText(this@MainActivity, "Вход выполнен: ${userResponse.data.first_name}", Toast.LENGTH_SHORT).show()
+
+                val intent = Intent(this@MainActivity, ChildrenActivity::class.java)
+                intent.putExtra("user_name", userResponse.data.first_name)
+                startActivity(intent)
+
             } catch (e: Exception) {
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, e.message, Toast.LENGTH_SHORT).show()
-                }
+                Toast.makeText(this@MainActivity, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
-        loginThread?.start()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        loginThread?.interrupt() // Отменяем поток при выходе
+        loginJob?.cancel() // отмена запроса
+        coroutineContext.cancel() // отмена всех корутин
     }
 
     private fun hideKeyboard() {
