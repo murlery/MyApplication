@@ -6,14 +6,12 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -27,6 +25,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
 
 class ChildrenActivity : AppCompatActivity() {
     private lateinit var nameChildEditText: EditText;
@@ -141,6 +140,7 @@ class ChildrenActivity : AppCompatActivity() {
             ioJob = lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     childDao.insert(child)
+                    sendChildToServer(child)
                     withContext(Dispatchers.Main) {
                         childrenList.add(child)
                         Toast.makeText(this@ChildrenActivity, "Ребенок добавлен!", Toast.LENGTH_SHORT).show()
@@ -154,6 +154,22 @@ class ChildrenActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun sendChildToServer(child: Child) {
+        val apiService = NetworkModule.provideApiService(this)
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val childDTO = ChildDTO(0, child.user, child.name, formatter.format(child.birthday))
+
+        lifecycleScope.launch {
+            try {
+                val response = apiService.createChild(childDTO)
+                Toast.makeText(this@ChildrenActivity, "Добавлен на сервер: ${response.name}", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@ChildrenActivity, "Ошибка отправки: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
 
     // Функция очистки полей ввода
     private fun clearFields() {
